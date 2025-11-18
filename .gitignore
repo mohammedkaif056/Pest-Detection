@@ -4,3 +4,7 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# Environment variables (API keys)
+.env
+python_ml_service/.env

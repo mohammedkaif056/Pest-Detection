@@ -89,11 +89,11 @@ export async function getAvailableClasses(): Promise<string[]> {
 }
 
 /**
- * Fallback detection using Google Gemini (when ML service is unavailable)
+ * Fallback detection using Groq Llama Vision (when ML service is unavailable)
  */
-export async function detectWithGemini(
+export async function detectWithGroq(
   imageBase64: string,
-  geminiApiKey: string
+  groqApiKey: string
 ): Promise<DetectionResult> {
   try {
     // Extract base64 data if it includes data URL prefix
@@ -101,45 +101,47 @@ export async function detectWithGemini(
       ? imageBase64.split('base64,')[1]
       : imageBase64;
     
-    const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
+    const apiUrl = "https://api.groq.com/openai/v1/chat/completions";
     
     const response = await axios.post(
       apiUrl,
       {
-        contents: [
+        model: "llama-3.2-11b-vision-preview",
+        messages: [
           {
-            parts: [
+            role: "user",
+            content: [
               {
+                type: "text",
                 text: "Analyze this plant image and identify any diseases. Respond with ONLY valid JSON in this format: {\"disease_name\": \"string\", \"confidence\": number between 0-1, \"severity\": \"None/Low/Medium/High\"}",
               },
               {
-                inline_data: {
-                  mime_type: "image/jpeg",
-                  data: base64Data,
+                type: "image_url",
+                image_url: {
+                  url: `data:image/jpeg;base64,${base64Data}`,
                 },
               },
             ],
           },
         ],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 1000,
-        },
+        temperature: 0.3,
+        max_tokens: 1000,
       },
       {
         headers: {
+          "Authorization": `Bearer ${groqApiKey}`,
           "Content-Type": "application/json",
         },
         timeout: 30000,
       }
     );
 
-    const content = response.data.candidates[0].content.parts[0].text;
+    const content = response.data.choices[0].message.content;
     
     // Extract JSON from response
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      throw new Error("Could not parse JSON from Gemini response");
+      throw new Error("Could not parse JSON from Groq response");
     }
     
     const result = JSON.parse(jsonMatch[0]);
@@ -149,30 +151,30 @@ export async function detectWithGemini(
       severity: result.severity || "Unknown",
     };
   } catch (error: any) {
-    console.error("Gemini detection failed:", error);
-    throw new Error("Both ML service and Gemini fallback failed");
+    console.error("Groq detection failed:", error);
+    throw new Error("Both ML service and Groq fallback failed");
   }
 }
 
 /**
- * Detect with automatic fallback to Gemini if ML service fails
+ * Detect with automatic fallback to Groq if ML service fails
  */
 export async function detectWithFallback(
   imageBase64: string,
-  geminiApiKey?: string
-): Promise<DetectionResult & { source: "ml" | "gemini" }> {
+  groqApiKey?: string
+): Promise<DetectionResult & { source: "ml" | "groq" }> {
   try {
     // Try ML service first
     const result = await detectPlantDisease(imageBase64);
     return { ...result, source: "ml" };
   } catch (mlError) {
-    console.warn("ML service failed, trying Gemini fallback...");
+    console.warn("ML service failed, trying Groq fallback...");
 
-    if (geminiApiKey) {
-      const result = await detectWithGemini(imageBase64, geminiApiKey);
-      return { ...result, source: "gemini" };
+    if (groqApiKey) {
+      const result = await detectWithGroq(imageBase64, groqApiKey);
+      return { ...result, source: "groq" };
     }
 
-    throw new Error("ML service unavailable and no Gemini API key provided");
+    throw new Error("ML service unavailable and no Groq API key provided");
   }
 }

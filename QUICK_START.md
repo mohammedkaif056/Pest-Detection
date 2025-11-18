@@ -156,4 +156,4 @@ Get-NetTCPConnection -LocalPort 8001 -State Listen
 **Last Updated:** November 18, 2025  
 **Model Version:** Multi-plant v1.0 (92% accuracy)  
 **Status:** Ready for use, training pending for higher accuracy  
-**AI API:** Google Gemini (AIzaSyBhvLIgqaYu30AZPDuMHgmKEUvzcx_MwjY)   
+**AI API:** Groq Llama 3.2 Vision (configured in .env)   
