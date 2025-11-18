@@ -12,7 +12,7 @@
 ### Step 1: Start ML Service
 ```powershell
 cd C:\Users\mdkai\Desktop\AllergyConnectAI\python_ml_service
-C:\Users\mdkai\Anaconda3\python.exe C:\Users\mdkai\Desktop\AllergyConnectAI\python_ml_service\start.py
+C:\Users\mdkai\Anaconda3\python.exe serve.py
 ```
 **Keep this window open!** (Port 8001)
 
