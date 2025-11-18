@@ -137,7 +137,7 @@ export async function detectWithGemini(
     const content = response.data.candidates[0].content.parts[0].text;
     
     // Extract JSON from response
-    const jsonMatch = content.match(/\{.*\}/s);
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error("Could not parse JSON from Gemini response");
     }
