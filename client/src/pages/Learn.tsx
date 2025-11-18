@@ -46,12 +46,16 @@ export default function Learn() {
   const learnMutation = useMutation({
     mutationFn: async (data: LearnFormValues) => {
       // Map supportImages to images for API endpoint
-      return await apiRequest("POST", "/api/learn", {
+      const response = await apiRequest("POST", "/api/learn", {
         pestName: data.pestName,
         images: data.supportImages,
       });
+      
+      // Parse JSON response
+      return await response.json();
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (result, variables) => {
+      console.log("Learn success:", result);
       toast({
         title: "Success!",
         description: `Successfully learned new pest species: ${variables.pestName}`,
@@ -60,6 +64,7 @@ export default function Learn() {
       queryClient.invalidateQueries({ queryKey: ["/api/prototypes"] });
     },
     onError: (error: any) => {
+      console.error("Learn error:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to learn new species. Please try again.",

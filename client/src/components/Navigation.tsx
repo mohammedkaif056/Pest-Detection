@@ -9,7 +9,7 @@ export default function Navigation() {
   const [location] = useLocation();
 
   const navLinks = [
-    { href: "/", label: "Home" },
+    // { href: "/", label: "Home" },
     { href: "/detect", label: "Detect" },
     { href: "/species", label: "Species" },
     { href: "/history", label: "History" },

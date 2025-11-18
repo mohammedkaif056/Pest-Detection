@@ -27,6 +27,7 @@ export interface IStorage {
   getSpecies(id: string): Promise<Species | undefined>;
   getAllSpecies(): Promise<Species[]>;
   getSpeciesByName(name: string): Promise<Species | undefined>;
+  searchSpecies(query: string): Promise<Species[]>;
   createSpecies(species: InsertSpecies): Promise<Species>;
 
   // Prototype operations
@@ -268,6 +269,17 @@ export class MemStorage implements IStorage {
   async getSpeciesByName(name: string): Promise<Species | undefined> {
     return Array.from(this.species.values()).find(
       (s) => s.name.toLowerCase() === name.toLowerCase()
+    );
+  }
+
+  async searchSpecies(query: string): Promise<Species[]> {
+    const lowerQuery = query.toLowerCase();
+    return Array.from(this.species.values()).filter(
+      (s) =>
+        s.name.toLowerCase().includes(lowerQuery) ||
+        s.scientificName.toLowerCase().includes(lowerQuery) ||
+        s.category.toLowerCase().includes(lowerQuery) ||
+        s.commonCrops?.some((crop) => crop.toLowerCase().includes(lowerQuery))
     );
   }
 

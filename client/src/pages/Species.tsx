@@ -1,13 +1,14 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { Search, Filter } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { Search, Filter, Sparkles } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
+import { apiRequest } from "@/lib/queryClient";
 import type { Species } from "@shared/schema";
 
 import aphidImage from "@assets/generated_images/Green_aphid_pest_closeup_bb59d407.png";
@@ -25,22 +26,161 @@ const sampleImages = [
   spiderMiteImage, grasshopperImage, leafMinerImage, thripsImage, cutwormImage
 ];
 
+// Additional sample species data to display
+const additionalSpecies = [
+  {
+    id: "sample-1",
+    name: "Tomato Hornworm",
+    scientificName: "Manduca quinquemaculata",
+    category: "larvae",
+    description: "Large green caterpillar that feeds on tomato, pepper, and eggplant foliage. Can quickly defoliate plants.",
+    riskLevel: "high",
+    commonCrops: ["Tomato", "Pepper", "Eggplant"],
+    imageUrl: caterpillarImage
+  },
+  {
+    id: "sample-2",
+    name: "Colorado Potato Beetle",
+    scientificName: "Leptinotarsa decemlineata",
+    category: "insect",
+    description: "Yellow-orange beetle with black stripes. Major pest of potatoes, can cause complete defoliation.",
+    riskLevel: "critical",
+    commonCrops: ["Potato", "Tomato", "Eggplant"],
+    imageUrl: beetleImage
+  },
+  {
+    id: "sample-3",
+    name: "Aphids",
+    scientificName: "Aphidoidea",
+    category: "insect",
+    description: "Small soft-bodied insects that suck plant sap. Transmit viruses and cause leaf distortion.",
+    riskLevel: "high",
+    commonCrops: ["Various vegetables", "Fruits", "Ornamentals"],
+    imageUrl: aphidImage
+  },
+  {
+    id: "sample-4",
+    name: "Whiteflies",
+    scientificName: "Aleyrodidae",
+    category: "insect",
+    description: "Tiny white flying insects that feed on plant sap. Cause yellowing and honeydew secretion.",
+    riskLevel: "high",
+    commonCrops: ["Tomato", "Pepper", "Cucumber"],
+    imageUrl: whiteflyImage
+  },
+  {
+    id: "sample-5",
+    name: "Spider Mites",
+    scientificName: "Tetranychidae",
+    category: "mite",
+    description: "Microscopic arachnids causing stippling and webbing on leaves. Thrive in hot, dry conditions.",
+    riskLevel: "medium",
+    commonCrops: ["Tomato", "Pepper", "Beans"],
+    imageUrl: spiderMiteImage
+  },
+  {
+    id: "sample-6",
+    name: "Thrips",
+    scientificName: "Thysanoptera",
+    category: "insect",
+    description: "Tiny slender insects causing silvery scarring on leaves and fruit. Virus vectors.",
+    riskLevel: "medium",
+    commonCrops: ["Tomato", "Pepper", "Onion"],
+    imageUrl: thripsImage
+  },
+  {
+    id: "sample-7",
+    name: "Cutworms",
+    scientificName: "Agrotis spp.",
+    category: "larvae",
+    description: "Nocturnal caterpillars that cut seedlings at soil level. Major pest of young transplants.",
+    riskLevel: "high",
+    commonCrops: ["All vegetables", "Transplants"],
+    imageUrl: cutwormImage
+  },
+  {
+    id: "sample-8",
+    name: "Leaf Miners",
+    scientificName: "Liriomyza spp.",
+    category: "larvae",
+    description: "Larvae tunnel between leaf surfaces creating winding trails. Reduces photosynthesis.",
+    riskLevel: "medium",
+    commonCrops: ["Tomato", "Pepper", "Leafy greens"],
+    imageUrl: leafMinerImage
+  },
+  {
+    id: "sample-9",
+    name: "Grasshoppers",
+    scientificName: "Acrididae",
+    category: "insect",
+    description: "Large chewing insects that can cause extensive defoliation during outbreak years.",
+    riskLevel: "medium",
+    commonCrops: ["All crops", "Grains", "Vegetables"],
+    imageUrl: grasshopperImage
+  },
+];
+
 export default function SpeciesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [searchSource, setSearchSource] = useState<"database" | "ai" | null>(null);
 
-  const { data: species = [], isLoading } = useQuery<Species[]>({
+  // Fetch species from database
+  const { data: dbSpecies = [], isLoading: isLoadingDb } = useQuery<Species[]>({
     queryKey: ["/api/species"],
   });
 
-  const filteredSpecies = species.filter((s) => {
-    const matchesSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.scientificName.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = !selectedCategory || s.category === selectedCategory;
-    return matchesSearch && matchesCategory;
+  // AI search mutation
+  const aiSearchMutation = useMutation({
+    mutationFn: async (query: string) => {
+      const response = await apiRequest("POST", "/api/species/search", { query });
+      const data = await response.json();
+      return data as { source: "database" | "ai"; results: Species[] };
+    },
   });
 
-  const categories = Array.from(new Set(species.map((s) => s.category)));
+  // Combine database species with additional sample species
+  const allSpecies = [...dbSpecies, ...additionalSpecies];
+
+  // Handle search
+  const handleSearch = async () => {
+    if (searchQuery.trim()) {
+      const result = await aiSearchMutation.mutateAsync(searchQuery);
+      setSearchSource(result.source);
+    } else {
+      setSearchSource(null);
+      aiSearchMutation.reset();
+    }
+  };
+
+  // Determine which species to display
+  let displaySpecies: Species[];
+  
+  if (aiSearchMutation.data?.results && aiSearchMutation.data.results.length > 0) {
+    // Use AI search results directly (already filtered by search query)
+    displaySpecies = aiSearchMutation.data.results;
+  } else if (searchQuery && aiSearchMutation.isSuccess && aiSearchMutation.data?.results.length === 0) {
+    // AI search returned no results
+    displaySpecies = [];
+  } else {
+    // Use all species (database + samples) and filter locally
+    displaySpecies = allSpecies.filter((s) => {
+      const matchesSearch = searchQuery === "" || 
+        s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.scientificName.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesSearch;
+    });
+  }
+
+  // Apply category filter
+  const filteredSpecies = displaySpecies.filter((s) => {
+    const matchesCategory = !selectedCategory || s.category === selectedCategory;
+    return matchesCategory;
+  });
+
+  const categories = Array.from(new Set(allSpecies.map((s) => s.category)));
+
+  const isLoading = isLoadingDb || aiSearchMutation.isPending;
 
   return (
     <div className="min-h-screen bg-background">
@@ -73,18 +213,50 @@ export default function SpeciesPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
               <Input
                 type="search"
-                placeholder="Search by name or scientific name..."
+                placeholder="Search by name or scientific name... (AI-powered)"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                 className="pl-10 rounded-xl"
                 data-testid="input-search-species"
               />
             </div>
-            <Button variant="outline" className="rounded-xl" data-testid="button-filter">
-              <Filter className="mr-2 h-4 w-4" />
-              Filter
+            <Button 
+              onClick={handleSearch} 
+              disabled={!searchQuery.trim() || isLoading}
+              className="rounded-xl"
+              data-testid="button-ai-search"
+            >
+              {isLoading ? (
+                <>Searching...</>
+              ) : (
+                <>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  AI Search
+                </>
+              )}
             </Button>
           </div>
+
+          {searchSource && (
+            <div className="flex items-center gap-2">
+              <Badge variant={searchSource === "ai" ? "default" : "secondary"}>
+                {searchSource === "ai" ? (
+                  <>
+                    <Sparkles className="h-3 w-3 mr-1" />
+                    AI Results
+                  </>
+                ) : (
+                  "Database Results"
+                )}
+              </Badge>
+              {searchSource === "ai" && (
+                <p className="text-sm text-muted-foreground">
+                  Generated using AI knowledge - not found in database
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-2">
             <Button
@@ -154,11 +326,28 @@ export default function SpeciesPage() {
                     <p className="text-sm text-muted-foreground line-clamp-2">
                       {s.description}
                     </p>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="outline" className="capitalize">
                         {s.category}
                       </Badge>
+                      {s.taxonomy?.family && (
+                        <Badge variant="outline" className="text-xs">
+                          {s.taxonomy.family}
+                        </Badge>
+                      )}
                     </div>
+                    {s.commonCrops && s.commonCrops.length > 0 && (
+                      <div className="pt-2 border-t">
+                        <p className="text-xs text-muted-foreground mb-1">Affects:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {s.commonCrops.slice(0, 3).map((crop, i) => (
+                            <span key={i} className="text-xs bg-muted px-2 py-1 rounded">
+                              {crop}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </motion.div>
@@ -168,7 +357,29 @@ export default function SpeciesPage() {
 
         {filteredSpecies.length === 0 && !isLoading && (
           <div className="text-center py-20">
-            <p className="text-muted-foreground">No species found matching your criteria.</p>
+            {searchQuery ? (
+              <div className="space-y-3">
+                <p className="text-muted-foreground">
+                  No species found for "{searchQuery}".
+                </p>
+                {!aiSearchMutation.data && (
+                  <Button onClick={handleSearch} variant="outline">
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Search with AI
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <p className="text-muted-foreground">No species found matching your criteria.</p>
+            )}
+          </div>
+        )}
+
+        {aiSearchMutation.isError && (
+          <div className="text-center py-12">
+            <p className="text-destructive">
+              AI search failed. Please try again or check your connection.
+            </p>
           </div>
         )}
       </div>

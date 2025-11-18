@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Detection Diagnostic</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #000; color: #0f0; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        button { padding: 15px 30px; font-size: 18px; cursor: pointer; background: #0f0; color: #000; border: none; border-radius: 5px; font-weight: bold; }
+        button:hover { background: #0d0; }
+        pre { background: #111; padding: 15px; border-radius: 5px; overflow-x: auto; border: 2px solid #0f0; }
+        input[type="file"] { margin: 20px 0; font-size: 16px; color: #0f0; }
+        .result { margin-top: 20px; }
+        .field { margin: 10px 0; padding: 15px; background: #111; border-radius: 3px; border-left: 4px solid #0f0; }
+        .label { color: #0f0; font-weight: bold; font-size: 18px; }
+        .value { color: #fff; margin-top: 5px; font-size: 16px; }
+        h1 { color: #0f0; text-align: center; font-size: 32px; }
+        h2 { color: #0f0; margin-top: 30px; }
+        .error { color: #f00; background: #300; padding: 15px; border-radius: 5px; border: 2px solid #f00; }
+        .success { color: #0f0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔬 DETECTION SYSTEM DIAGNOSTIC</h1>
+        <p style="text-align: center; font-size: 18px;">This will show EXACTLY what the API returns</p>
+        
+        <input type="file" id="imageInput" accept="image/*">
+        <button onclick="detectDisease()">🚀 DETECT NOW</button>
+        
+        <div id="result" class="result"></div>
+    </div>
+
+    <script>
+        async function detectDisease() {
+            const fileInput = document.getElementById('imageInput');
+            const resultDiv = document.getElementById('result');
+            
+            if (!fileInput.files || !fileInput.files[0]) {
+                alert('Please select an image first');
+                return;
+            }
+            
+            resultDiv.innerHTML = '<p class="success">🔄 Analyzing image...</p>';
+            
+            try {
+                // Read file as base64
+                const file = fileInput.files[0];
+                const reader = new FileReader();
+                
+                reader.onload = async function(e) {
+                    const base64 = e.target.result;
+                    
+                    console.log('Sending image to API...');
+                    const startTime = Date.now();
+                    
+                    const response = await fetch('http://localhost:5000/api/detect', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ image: base64 })
+                    });
+                    
+                    const elapsed = Date.now() - startTime;
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const data = await response.json();
+                    console.log('Detection result:', data);
+                    
+                    // Display results
+                    let html = '<h2>✅ API RESPONSE RECEIVED (in ' + elapsed + 'ms)</h2>';
+                    
+                    html += '<h2>📋 RAW JSON:</h2>';
+                    html += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                    
+                    html += '<h2>🔍 FIELD-BY-FIELD ANALYSIS:</h2>';
+                    
+                    const fields = [
+                        'pestName',
+                        'confidence',
+                        'riskLevel',
+                        'plant',
+                        'pathogenType',
+                        'pathogenName',
+                        'symptoms',
+                        'prevention',
+                        'treatmentDetails',
+                        'prognosis',
+                        'spreadRisk'
+                    ];
+                    
+                    fields.forEach(field => {
+                        const value = data[field];
+                        const type = typeof value;
+                        const isNull = value === null;
+                        const isUndefined = value === undefined;
+                        
+                        let displayValue;
+                        if (isNull) {
+                            displayValue = '<span style="color: #f00;">NULL</span>';
+                        } else if (isUndefined) {
+                            displayValue = '<span style="color: #f00;">UNDEFINED</span>';
+                        } else if (Array.isArray(value)) {
+                            displayValue = `Array with ${value.length} items: [${value.slice(0, 2).join(', ')}...]`;
+                        } else if (type === 'object') {
+                            displayValue = 'Object with ' + Object.keys(value).length + ' properties';
+                        } else if (type === 'number') {
+                            displayValue = `<span style="color: #0ff;">${value} (${(value * 100).toFixed(1)}%)</span>`;
+                        } else {
+                            displayValue = String(value);
+                        }
+                        
+                        html += `
+                            <div class="field">
+                                <div class="label">${field}:</div>
+                                <div class="value">
+                                    Type: ${type} | 
+                                    Is Null: ${isNull} | 
+                                    Is Undefined: ${isUndefined}<br>
+                                    Value: ${displayValue}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    // Special checks
+                    html += '<h2>⚠️ POTENTIAL ISSUES:</h2>';
+                    let issues = [];
+                    
+                    if (data.confidence === null || data.confidence === undefined) {
+                        issues.push('❌ confidence is NULL or UNDEFINED - this causes "N/A%"');
+                    }
+                    if (!data.symptoms || data.symptoms.length === 0) {
+                        issues.push('❌ symptoms is empty - this causes "No symptoms listed"');
+                    }
+                    if (!data.plant) {
+                        issues.push('⚠️ plant field is missing');
+                    }
+                    if (!data.pathogenType) {
+                        issues.push('⚠️ pathogenType field is missing');
+                    }
+                    
+                    if (issues.length === 0) {
+                        html += '<div class="field"><div class="success">✅ ALL FIELDS LOOK GOOD!</div></div>';
+                    } else {
+                        issues.forEach(issue => {
+                            html += `<div class="field"><div class="error">${issue}</div></div>`;
+                        });
+                    }
+                    
+                    resultDiv.innerHTML = html;
+                };
+                
+                reader.readAsDataURL(file);
+                
+            } catch (error) {
+                console.error('Detection error:', error);
+                resultDiv.innerHTML = `<div class="error">❌ ERROR: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>

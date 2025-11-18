@@ -1,0 +1,8 @@
+# Placeholder file for trained model weights
+# 
+# To use the service, you need to either:
+# 1. Train your own model using: poetry run python -m training.train
+# 2. Download pretrained weights and place them here
+#
+# The model will be automatically loaded on service startup
+# If no weights are found, the service will use pretrained ImageNet weights

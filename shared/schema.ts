@@ -13,6 +13,21 @@ export const detections = pgTable("detections", {
   detectedAt: timestamp("detected_at").defaultNow().notNull(),
   similarSpecies: jsonb("similar_species").$type<Array<{ name: string; confidence: number }>>(),
   treatments: jsonb("treatments").$type<Array<{ name: string; type: string; effectiveness: string }>>(),
+  // Extended disease information
+  plant: text("plant"),
+  pathogenType: text("pathogen_type"),
+  pathogenName: text("pathogen_name"),
+  symptoms: jsonb("symptoms").$type<string[]>(),
+  treatmentDetails: jsonb("treatment_details").$type<{
+    immediate_actions?: string[];
+    chemical_control?: string[];
+    organic_control?: string[];
+    cultural_practices?: string[];
+    maintenance?: string[];
+  }>(),
+  prevention: jsonb("prevention").$type<string[]>(),
+  prognosis: text("prognosis"),
+  spreadRisk: text("spread_risk"),
 });
 
 export const insertDetectionSchema = createInsertSchema(detections).omit({

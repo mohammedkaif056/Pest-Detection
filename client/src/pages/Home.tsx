@@ -50,7 +50,7 @@ export default function Home() {
                 AI-Powered <span className="text-primary">Pest Detection</span> for Agriculture
               </h1>
               <p className="text-lg md:text-xl text-muted-foreground leading-relaxed">
-                Identify crop pests instantly with 98.5% accuracy using hybrid few-shot learning. Works offline. Learn new species with just 5-10 images.
+                Identify crop pests instantly with 88.7% accuracy using hybrid few-shot learning. Works offline. Learn new species with just 5-10 images.
               </p>
             </div>
 
@@ -70,7 +70,7 @@ export default function Home() {
 
             <div className="flex items-center gap-8 pt-4">
               <div>
-                <div className="font-mono font-semibold text-2xl">98.5%</div>
+                <div className="font-mono font-semibold text-2xl">88.7%</div>
                 <div className="text-sm text-muted-foreground">Accuracy</div>
               </div>
               <div className="h-12 w-px bg-border" />
