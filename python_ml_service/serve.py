@@ -96,15 +96,14 @@ def load_model():
 
 def detect_with_ai_vision(image_base64: str) -> dict:
     """
-    Use Groq Llama Vision to detect plant disease from image.
+    Use Google Gemini Vision to detect plant disease from image.
     Fallback for unknown/low-confidence images.
     """
-    # Try GROQ_API_KEY first, fallback to GEMINI_API_KEY for backwards compatibility
-    api_key = os.getenv("GROQ_API_KEY") or os.getenv("GEMINI_API_KEY")
-    logger.info(f"🔑 Groq API Key present: {bool(api_key)}, Length: {len(api_key) if api_key else 0}")
+    api_key = os.getenv("GEMINI_API_KEY")
+    logger.info(f"🔑 Gemini API Key present: {bool(api_key)}, Length: {len(api_key) if api_key else 0}")
     
     if not api_key:
-        logger.error("❌ GROQ_API_KEY not found in environment - AI detection disabled")
+        logger.error("❌ GEMINI_API_KEY not found in environment - AI detection disabled")
         return None
     
     try:
@@ -114,22 +113,18 @@ def detect_with_ai_vision(image_base64: str) -> dict:
         else:
             image_data = image_base64
         
-        # Groq API endpoint
-        url = "https://api.groq.com/openai/v1/chat/completions"
+        # Google Gemini API endpoint
+        url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
         
         headers = {
-            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
         
         payload = {
-            "model": "llama-3.2-11b-vision-preview",
-            "messages": [
+            "contents": [
                 {
-                    "role": "user",
-                    "content": [
+                    "parts": [
                         {
-                            "type": "text",
                             "text": """You are an expert plant pathologist. Analyze this image carefully.
 
 CRITICAL INSTRUCTIONS:
@@ -152,28 +147,30 @@ Respond with ONLY valid JSON:
 }"""
                         },
                         {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{image_data}"
+                            "inline_data": {
+                                "mime_type": "image/jpeg",
+                                "data": image_data
                             }
                         }
                     ]
                 }
             ],
-            "temperature": 0.3,
-            "max_tokens": 1000
+            "generationConfig": {
+                "temperature": 0.3,
+                "maxOutputTokens": 1000
+            }
         }
         
-        logger.info("🤖 Calling Groq Llama Vision for AI detection...")
-        logger.info(f"📡 Calling Groq API...")
+        logger.info("🤖 Calling Google Gemini Vision for AI detection...")
+        logger.info(f"📡 Calling Gemini API...")
         response = requests.post(url, headers=headers, json=payload, timeout=30)
-        logger.info(f"📥 Groq Response Status: {response.status_code}")
+        logger.info(f"📥 Gemini Response Status: {response.status_code}")
         response.raise_for_status()
         
         result = response.json()
-        logger.info(f"📄 Groq Response Keys: {list(result.keys())}")
-        content = result["choices"][0]["message"]["content"]
-        logger.info(f"📝 Groq Content (first 200 chars): {content[:200]}")
+        logger.info(f"📄 Gemini Response Keys: {list(result.keys())}")
+        content = result["candidates"][0]["content"]["parts"][0]["text"]
+        logger.info(f"📝 Gemini Content (first 200 chars): {content[:200]}")
         
         # Extract JSON from response
         import re
