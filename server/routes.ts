@@ -34,8 +34,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("Received image, length:", image.length);
       console.log("Image starts with:", image.substring(0, 50));
 
-      // Try ML service first, fallback to Gemini
-      const result = await detectWithFallback(image, process.env.GEMINI_API_KEY);
+      // Try ML service first, fallback to Groq
+      const result = await detectWithFallback(image, process.env.GROQ_API_KEY);
       console.log("Detection result from ML:", result);
 
       // Check if disease info is missing or incomplete (from Learn New or unknown disease)
