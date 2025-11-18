@@ -99,7 +99,8 @@ def detect_with_ai_vision(image_base64: str) -> dict:
     Use Groq Llama Vision to detect plant disease from image.
     Fallback for unknown/low-confidence images.
     """
-    api_key = os.getenv("GROQ_API_KEY")
+    # Try GROQ_API_KEY first, fallback to GEMINI_API_KEY for backwards compatibility
+    api_key = os.getenv("GROQ_API_KEY") or os.getenv("GEMINI_API_KEY")
     logger.info(f"🔑 Groq API Key present: {bool(api_key)}, Length: {len(api_key) if api_key else 0}")
     
     if not api_key:

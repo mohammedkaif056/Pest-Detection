@@ -55,8 +55,9 @@ class Settings(BaseSettings):
     BATCH_SIZE: int = 32  # Maximum batch size for inference
     MAX_IMAGE_SIZE_MB: int = 10  # Maximum allowed image size
     
-    # Google Gemini API Settings
-    GEMINI_API_KEY: str = ""  # Google Gemini API key for AI vision
+    # AI Vision API Settings
+    GROQ_API_KEY: str = ""  # Groq API key for AI vision (Llama 3.2 Vision)
+    GEMINI_API_KEY: str = ""  # Legacy: Google Gemini API key (deprecated)
     
     # Training Settings (used in train.py)
     LEARNING_RATE: float = 0.001
