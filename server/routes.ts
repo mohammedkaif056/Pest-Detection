@@ -37,8 +37,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("[DETECT] GEMINI_API_KEY:", process.env.GEMINI_API_KEY ? "SET" : "NOT SET");
       console.log("[DETECT] CEREBRAS_API_KEY:", process.env.CEREBRAS_API_KEY ? "SET" : "NOT SET");
 
-      // Try ML service first, fallback to Gemini
-      const result = await detectWithFallback(image, process.env.GEMINI_API_KEY);
+      let result;
+      let usedFallback = false;
+
+      try {
+        // Try ML service first - this is the PRIMARY method
+        result = await detectWithFallback(image, process.env.GEMINI_API_KEY);
+        usedFallback = result.source === "gemini";
+        console.log("[DETECT] Detection successful via:", result.source);
+      } catch (error: any) {
+        console.error("[DETECT] Both ML and Gemini failed:", error.message);
+        
+        // Return a helpful error message
+        return res.status(503).json({
+          error: "Detection service unavailable",
+          details: "Unable to connect to ML service. Please ensure ML_SERVICE_URL environment variable is set correctly.",
+          mlServiceUrl: process.env.ML_SERVICE_URL || "NOT SET",
+          geminiConfigured: !!process.env.GEMINI_API_KEY,
+          message: error.message
+        });
+      }
       console.log("Detection result from ML:", result);
 
       // Check if disease info is missing or incomplete (from Learn New or unknown disease)

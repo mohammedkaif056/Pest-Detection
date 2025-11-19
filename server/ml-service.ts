@@ -96,12 +96,16 @@ export async function detectWithGemini(
   geminiApiKey: string
 ): Promise<DetectionResult> {
   try {
+    console.log("[GEMINI] Starting fallback detection...");
+    
     // Extract base64 data if it includes data URL prefix
     const base64Data = imageBase64.includes('base64,') 
       ? imageBase64.split('base64,')[1]
       : imageBase64;
     
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${geminiApiKey}`;
+    
+    console.log("[GEMINI] Calling API:", apiUrl.replace(geminiApiKey, 'KEY_HIDDEN'));
     
     const response = await axios.post(
       apiUrl,
@@ -110,47 +114,82 @@ export async function detectWithGemini(
           {
             parts: [
               {
-                text: "Analyze this plant image and identify any diseases. Respond with ONLY valid JSON in this format: {\"disease_name\": \"string\", \"confidence\": number between 0-1, \"severity\": \"None/Low/Medium/High\"}",
+                text: "You are a plant disease expert. Analyze this plant image and identify any diseases. Respond with ONLY a valid JSON object with these exact fields: disease_name (string), confidence (number 0-1), severity (string: None/Low/Medium/High/Critical). Example: {\"disease_name\":\"Tomato Late Blight\",\"confidence\":0.85,\"severity\":\"High\"}"
               },
               {
                 inline_data: {
                   mime_type: "image/jpeg",
-                  data: base64Data,
-                },
-              },
-            ],
-          },
+                  data: base64Data
+                }
+              }
+            ]
+          }
         ],
         generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 500,
-        },
+          temperature: 0.1,
+          maxOutputTokens: 200,
+          topP: 0.8,
+          topK: 10
+        }
       },
       {
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "application/json"
         },
-        timeout: 15000,
+        timeout: 15000
       }
     );
 
-    const content = response.data.candidates[0].content.parts[0].text;
+    console.log("[GEMINI] Response received, status:", response.status);
     
-    // Extract JSON from response
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+      console.error("[GEMINI] Invalid response structure:", JSON.stringify(response.data));
+      throw new Error("Invalid Gemini API response structure");
+    }
+
+    const content = response.data.candidates[0].content.parts[0].text;
+    console.log("[GEMINI] Raw content:", content);
+    
+    // Extract JSON from response (handle markdown code blocks)
+    let jsonText = content.trim();
+    if (jsonText.includes('```')) {
+      const match = jsonText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+      jsonText = match ? match[1] : jsonText;
+    }
+    const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
+      console.error("[GEMINI] Could not extract JSON from:", content);
       throw new Error("Could not parse JSON from Gemini response");
     }
     
     const result = JSON.parse(jsonMatch[0]);
+    console.log("[GEMINI] Parsed result:", result);
+    
     return {
-      disease_name: result.disease_name || "Unknown",
-      confidence: result.confidence || 0.5,
-      severity: result.severity || "Unknown",
+      disease_name: result.disease_name || "Unknown Disease",
+      confidence: typeof result.confidence === 'number' ? result.confidence : 0.5,
+      severity: result.severity || "Medium",
+      plant: "Unknown",
+      pathogen_type: null,
+      pathogen_name: null,
+      symptoms: ["Gemini visual analysis - detailed information not available"],
+      treatment: {
+        immediate_actions: ["Consult agricultural expert for accurate diagnosis"],
+        chemical_control: [],
+        organic_control: [],
+        cultural_practices: [],
+        maintenance: []
+      },
+      prevention: ["Regular monitoring and inspection"],
+      prognosis: "AI-based preliminary assessment",
+      spread_risk: "Unknown - professional assessment recommended"
     };
   } catch (error: any) {
-    console.error("Gemini detection failed:", error);
-    throw new Error("Both ML service and Gemini fallback failed");
+    console.error("[GEMINI] Detection failed:", error.response?.status, error.response?.data || error.message);
+    if (error.response?.data) {
+      console.error("[GEMINI] Full error response:", JSON.stringify(error.response.data, null, 2));
+    }
+    throw new Error("Gemini detection failed: " + (error.response?.data?.error?.message || error.message));
   }
 }
 
