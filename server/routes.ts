@@ -44,7 +44,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         !result.symptoms || 
         result.symptoms.length === 0 || 
         result.symptoms[0] === "Information not available for this disease" ||
-        result.confidence < 0.7; // Low confidence = likely unknown disease
+        result.confidence < 0.6; // Only use AI for very low confidence (< 60%)
 
       let aiGeneratedInfo = null;
       
@@ -65,7 +65,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log("[CEREBRAS-AI] Successfully generated disease info using Qwen 3 235B");
         } catch (error) {
           console.error("[CEREBRAS-AI] Failed to generate disease info:", error);
+          // Continue with ML result even if Cerebras fails
         }
+      } else {
+        console.log(`[DETECTION] Skipping AI generation (confidence: ${result.confidence >= 0.6 ? 'good' : 'low'})`);
       }
 
       // Convert to our schema format

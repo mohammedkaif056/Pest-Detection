@@ -35,7 +35,7 @@ export interface MLServiceHealth {
 export async function checkMLServiceHealth(): Promise<MLServiceHealth> {
   try {
     const response = await axios.get(`${ML_SERVICE_URL}/health`, {
-      timeout: 5000,
+      timeout: 3000,
     });
     return response.data;
   } catch (error) {
@@ -57,7 +57,7 @@ export async function detectPlantDisease(
         image_base64: imageBase64,
       },
       {
-        timeout: 30000, // 30 seconds for inference
+        timeout: 15000, // 15 seconds for inference
         headers: {
           "Content-Type": "application/json",
         },
@@ -123,14 +123,14 @@ export async function detectWithGemini(
         ],
         generationConfig: {
           temperature: 0.3,
-          maxOutputTokens: 1000,
+          maxOutputTokens: 500,
         },
       },
       {
         headers: {
           "Content-Type": "application/json",
         },
-        timeout: 30000,
+        timeout: 15000,
       }
     );
 

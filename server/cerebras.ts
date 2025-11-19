@@ -73,7 +73,7 @@ Provide accurate, detailed information. If unsure, use null for pathogen fields.
           }
         ],
         temperature: 0.2,
-        max_tokens: 2000,
+        max_tokens: 1200,
         response_format: { type: "json_object" }
       },
       {
@@ -81,7 +81,7 @@ Provide accurate, detailed information. If unsure, use null for pathogen fields.
           "Content-Type": "application/json",
           "Authorization": `Bearer ${CEREBRAS_API_KEY}`
         },
-        timeout: 30000
+        timeout: 8000
       }
     );
 

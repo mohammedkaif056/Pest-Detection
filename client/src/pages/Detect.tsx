@@ -77,8 +77,33 @@ export default function Detect() {
       setSelectedFile(file);
       const reader = new FileReader();
       reader.onload = () => {
-        setSelectedImage(reader.result as string);
-        setDetectionResult(null);
+        const img = new Image();
+        img.onload = () => {
+          // Compress image to max 800x800 for faster upload
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxSize = 800;
+          
+          if (width > height && width > maxSize) {
+            height = (height * maxSize) / width;
+            width = maxSize;
+          } else if (height > maxSize) {
+            width = (width * maxSize) / height;
+            height = maxSize;
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          
+          // Convert to base64 with 0.85 quality
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
+          setSelectedImage(compressedBase64);
+          setDetectionResult(null);
+        };
+        img.src = reader.result as string;
       };
       reader.readAsDataURL(file);
     }
@@ -193,9 +218,21 @@ export default function Detect() {
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
-    // Set canvas dimensions to match video
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    // Set canvas dimensions to max 800x800 for faster processing
+    const maxSize = 800;
+    let width = video.videoWidth;
+    let height = video.videoHeight;
+    
+    if (width > height && width > maxSize) {
+      height = (height * maxSize) / width;
+      width = maxSize;
+    } else if (height > maxSize) {
+      width = (width * maxSize) / height;
+      height = maxSize;
+    }
+
+    canvas.width = width;
+    canvas.height = height;
 
     // Draw current video frame to canvas
     const context = canvas.getContext("2d");
@@ -204,7 +241,7 @@ export default function Detect() {
       return;
     }
 
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    context.drawImage(video, 0, 0, width, height);
 
     // Convert canvas to blob and then to file
     canvas.toBlob((blob) => {
@@ -232,7 +269,7 @@ export default function Detect() {
         handleCloseCamera();
       };
       reader.readAsDataURL(blob);
-    }, "image/jpeg", 0.95); // High quality JPEG
+    }, "image/jpeg", 0.85); // High quality JPEG with 0.85 compression
   };
 
   const handleClearImage = () => {
