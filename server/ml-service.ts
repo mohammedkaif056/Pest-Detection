@@ -101,7 +101,7 @@ export async function detectWithGemini(
       ? imageBase64.split('base64,')[1]
       : imageBase64;
     
-    const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
     
     const response = await axios.post(
       apiUrl,
