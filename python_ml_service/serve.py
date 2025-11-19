@@ -232,13 +232,31 @@ class HealthResponse(BaseModel):
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
-    """Health check endpoint."""
-    model, prototypes, _ = load_model()
-    return HealthResponse(
-        status="ok",
-        model_loaded=model is not None,
-        num_classes=len(prototypes)
-    )
+    """Health check endpoint - lightweight version for deployment."""
+    try:
+        # Don't load model on health check - just verify files exist
+        assets_dir = Path(__file__).parent / "assets"
+        model_exists = (assets_dir / "pest_encoder.pth").exists() or (assets_dir / "simple_pest_encoder.pth").exists()
+        prototypes_path = assets_dir / "class_prototypes.json"
+        
+        num_classes = 0
+        if prototypes_path.exists():
+            with open(prototypes_path) as f:
+                prototypes = json.load(f)
+                num_classes = len(prototypes)
+        
+        return HealthResponse(
+            status="ok",
+            model_loaded=model_exists,
+            num_classes=num_classes
+        )
+    except Exception as e:
+        logger.error(f"Health check error: {e}")
+        return HealthResponse(
+            status="error",
+            model_loaded=False,
+            num_classes=0
+        )
 
 
 @app.post("/api/v1/detect", response_model=DetectionResponse)
