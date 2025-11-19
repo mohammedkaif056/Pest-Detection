@@ -1,7 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { analyzePestImage, getTreatmentRecommendations, generateEmbedding, generateDiseaseInfo, searchSpeciesWithAI } from "./gemini";
+import { analyzePestImage, getTreatmentRecommendations, generateEmbedding, searchSpeciesWithAI } from "./gemini";
+import { generateDiseaseInfoWithCerebras } from "./cerebras";
 import { detectWithFallback, checkMLServiceHealth } from "./ml-service";
 import { insertDetectionSchema, insertPrototypeSchema } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
@@ -48,12 +49,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let aiGeneratedInfo = null;
       
       if (needsAIGeneration) {
-        console.log(`[AI-GENERATE] Generating disease info for: ${result.disease_name} (confidence: ${result.confidence})`);
+        console.log(`[CEREBRAS-AI] Generating disease info for: ${result.disease_name} (confidence: ${result.confidence})`);
         try {
-          aiGeneratedInfo = await generateDiseaseInfo(result.disease_name, result.confidence);
-          console.log("[AI-GENERATE] Successfully generated disease info");
+          const cerebrasInfo = await generateDiseaseInfoWithCerebras(result.disease_name, result.confidence);
+          aiGeneratedInfo = {
+            plant: cerebrasInfo.plant,
+            pathogenType: cerebrasInfo.pathogen_type,
+            pathogenName: cerebrasInfo.pathogen_name,
+            symptoms: cerebrasInfo.symptoms,
+            treatmentDetails: cerebrasInfo.treatment,
+            prevention: cerebrasInfo.prevention,
+            prognosis: cerebrasInfo.prognosis,
+            spreadRisk: cerebrasInfo.spread_risk
+          };
+          console.log("[CEREBRAS-AI] Successfully generated disease info using Qwen 3 235B");
         } catch (error) {
-          console.error("[AI-GENERATE] Failed to generate disease info:", error);
+          console.error("[CEREBRAS-AI] Failed to generate disease info:", error);
         }
       }
 
@@ -278,12 +289,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const mlResult = await mlResponse.json();
       console.log(`[LEARN] ML service response:`, mlResult);
 
-      // Generate disease information using OpenAI
-      console.log(`[LEARN] Generating disease info using AI for: ${pestName}`);
+      // Generate disease information using Cerebras Qwen 3 235B
+      console.log(`[LEARN] Generating disease info using Cerebras AI for: ${pestName}`);
       let diseaseInfo = null;
       try {
-        diseaseInfo = await generateDiseaseInfo(pestName, 0.85); // Use 0.85 as confidence for learned species
-        console.log(`[LEARN] AI-generated disease info successfully`);
+        const cerebrasInfo = await generateDiseaseInfoWithCerebras(pestName, 0.85); // Use 0.85 as confidence for learned species
+        diseaseInfo = {
+          plant: cerebrasInfo.plant,
+          pathogenType: cerebrasInfo.pathogen_type,
+          pathogenName: cerebrasInfo.pathogen_name,
+          symptoms: cerebrasInfo.symptoms,
+          treatmentDetails: cerebrasInfo.treatment,
+          prevention: cerebrasInfo.prevention,
+          prognosis: cerebrasInfo.prognosis,
+          spreadRisk: cerebrasInfo.spread_risk
+        };
+        console.log(`[LEARN] Cerebras AI-generated disease info successfully`);
       } catch (error) {
         console.error(`[LEARN] Failed to generate disease info:`, error);
       }
