@@ -161,16 +161,27 @@ export async function detectWithFallback(
   imageBase64: string,
   geminiApiKey?: string
 ): Promise<DetectionResult & { source: "ml" | "gemini" }> {
+  console.log("[ML-DETECT] Attempting ML service detection...");
+  console.log("[ML-DETECT] ML_SERVICE_URL:", ML_SERVICE_URL);
+  
   try {
     // Try ML service first
     const result = await detectPlantDisease(imageBase64);
+    console.log("[ML-DETECT] ✅ ML service successful");
     return { ...result, source: "ml" };
-  } catch (mlError) {
-    console.warn("ML service failed, trying Gemini fallback...");
+  } catch (mlError: any) {
+    console.warn("[ML-DETECT] ⚠️ ML service failed:", mlError.message);
+    console.warn("[ML-DETECT] Trying Gemini fallback...");
 
     if (geminiApiKey) {
-      const result = await detectWithGemini(imageBase64, geminiApiKey);
-      return { ...result, source: "gemini" };
+      try {
+        const result = await detectWithGemini(imageBase64, geminiApiKey);
+        console.log("[ML-DETECT] ✅ Gemini fallback successful");
+        return { ...result, source: "gemini" };
+      } catch (geminiError: any) {
+        console.error("[ML-DETECT] ❌ Gemini also failed:", geminiError.message);
+        throw new Error("Both ML service and Gemini fallback failed: " + geminiError.message);
+      }
     }
 
     throw new Error("ML service unavailable and no Gemini API key provided");

@@ -32,8 +32,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Image is required" });
       }
 
-      console.log("Received image, length:", image.length);
-      console.log("Image starts with:", image.substring(0, 50));
+      console.log("[DETECT] Received image, length:", image.length);
+      console.log("[DETECT] ML_SERVICE_URL:", process.env.ML_SERVICE_URL || "NOT SET - using localhost:8001");
+      console.log("[DETECT] GEMINI_API_KEY:", process.env.GEMINI_API_KEY ? "SET" : "NOT SET");
+      console.log("[DETECT] CEREBRAS_API_KEY:", process.env.CEREBRAS_API_KEY ? "SET" : "NOT SET");
 
       // Try ML service first, fallback to Gemini
       const result = await detectWithFallback(image, process.env.GEMINI_API_KEY);
@@ -140,9 +142,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log("Final response:", JSON.stringify(response, null, 2));
       return res.json(response);
-    } catch (error) {
-      console.error("Detection error:", error);
-      return res.status(500).json({ error: "Failed to detect pest" });
+    } catch (error: any) {
+      console.error("[DETECT] Detection error:", error.message);
+      console.error("[DETECT] Stack:", error.stack);
+      
+      // Provide more detailed error message
+      const errorMessage = error.message?.includes("ML service unavailable") 
+        ? "ML service is not available. Please check ML_SERVICE_URL environment variable."
+        : error.message?.includes("Gemini")
+        ? "Both ML service and Gemini fallback failed. Please check API keys."
+        : "Failed to detect pest: " + (error.message || "Unknown error");
+      
+      return res.status(500).json({ 
+        error: errorMessage,
+        details: process.env.NODE_ENV === "development" ? error.message : undefined
+      });
     }
   });
 
