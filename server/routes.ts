@@ -1,9 +1,9 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { analyzePestImage, getTreatmentRecommendations, generateEmbedding, searchSpeciesWithAI } from "./gemini";
+import { getTreatmentRecommendations, generateEmbedding, searchSpeciesWithAI, detectPlantDiseaseWithGemini } from "./gemini";
 import { generateDiseaseInfoWithCerebras } from "./cerebras";
-import { detectWithFallback, checkMLServiceHealth } from "./ml-service";
+import { detectWithMLService } from "./ml-service";
 import { insertDetectionSchema, insertPrototypeSchema } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
 
@@ -11,7 +11,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/ml-health - Check ML service status
   app.get("/api/ml-health", async (_req, res) => {
     try {
-      const health = await checkMLServiceHealth();
+      const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:8001";
+      const response = await fetch(`${ML_SERVICE_URL}/health`, { 
+        signal: AbortSignal.timeout(3000) 
+      });
+      const health = await response.json();
       return res.json(health);
     } catch (error) {
       return res.status(503).json({
@@ -23,7 +27,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/detect - Analyze pest image (now using ML service with OpenAI fallback)
+  // POST /api/detect - Analyze pest image using ML Service (primary) or Gemini (fallback)
   app.post("/api/detect", async (req, res) => {
     try {
       const { image } = req.body;
@@ -33,64 +37,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log("[DETECT] Received image, length:", image.length);
-      console.log("[DETECT] ML_SERVICE_URL:", process.env.ML_SERVICE_URL || "NOT SET - using localhost:8001");
-      console.log("[DETECT] GEMINI_API_KEY:", process.env.GEMINI_API_KEY ? "SET" : "NOT SET");
-      console.log("[DETECT] CEREBRAS_API_KEY:", process.env.CEREBRAS_API_KEY ? "SET" : "NOT SET");
 
       let result;
-      let usedFallback = false;
-
-      try {
-        // Try ML service first - this is the PRIMARY method
-        result = await detectWithFallback(image, process.env.GEMINI_API_KEY);
-        usedFallback = result.source === "gemini";
-        console.log("[DETECT] Detection successful via:", result.source);
-      } catch (error: any) {
-        console.error("[DETECT] Both ML and Gemini failed:", error.message);
-        
-        // Return a helpful error message
-        return res.status(503).json({
-          error: "Detection service unavailable",
-          details: "Unable to connect to ML service. Please ensure ML_SERVICE_URL environment variable is set correctly.",
-          mlServiceUrl: process.env.ML_SERVICE_URL || "NOT SET",
-          geminiConfigured: !!process.env.GEMINI_API_KEY,
-          message: error.message
-        });
-      }
-      console.log("Detection result from ML:", result);
-
-      // Check if disease info is missing or incomplete (from Learn New or unknown disease)
-      const needsAIGeneration = 
-        !result.symptoms || 
-        result.symptoms.length === 0 || 
-        result.symptoms[0] === "Information not available for this disease" ||
-        result.confidence < 0.6; // Only use AI for very low confidence (< 60%)
-
-      let aiGeneratedInfo = null;
       
-      if (needsAIGeneration) {
-        console.log(`[CEREBRAS-AI] Generating disease info for: ${result.disease_name} (confidence: ${result.confidence})`);
+      try {
+        // Try ML Service first (local PyTorch model)
+        console.log("[DETECT] Attempting ML service detection...");
+        result = await detectWithMLService(image);
+        console.log("[DETECT] ✅ ML service detection successful:", result.disease_name, "confidence:", result.confidence);
+      } catch (mlError: any) {
+        console.error("[DETECT] ⚠️ ML service failed:", mlError.message);
+        
+        // Fallback to Gemini if ML service fails
         try {
-          const cerebrasInfo = await generateDiseaseInfoWithCerebras(result.disease_name, result.confidence);
-          aiGeneratedInfo = {
-            plant: cerebrasInfo.plant,
-            pathogenType: cerebrasInfo.pathogen_type,
-            pathogenName: cerebrasInfo.pathogen_name,
-            symptoms: cerebrasInfo.symptoms,
-            treatmentDetails: cerebrasInfo.treatment,
-            prevention: cerebrasInfo.prevention,
-            prognosis: cerebrasInfo.prognosis,
-            spreadRisk: cerebrasInfo.spread_risk
-          };
-          console.log("[CEREBRAS-AI] Successfully generated disease info using Qwen 3 235B");
-        } catch (error) {
-          console.error("[CEREBRAS-AI] Failed to generate disease info:", error);
-          // Continue with ML result even if Cerebras fails
+          console.log("[DETECT] Falling back to Gemini 2.0 Flash...");
+          result = await detectPlantDiseaseWithGemini(image);
+          console.log("[DETECT] ✅ Gemini fallback successful:", result.disease_name);
+        } catch (geminiError: any) {
+          console.error("[DETECT] ❌ Both ML and Gemini failed");
+          return res.status(503).json({
+            error: "Detection service unavailable",
+            details: "Both ML service and Gemini API are unavailable.",
+            mlError: mlError.message,
+            geminiError: geminiError.message
+          });
         }
-      } else {
-        console.log(`[DETECTION] Skipping AI generation (confidence: ${result.confidence >= 0.6 ? 'good' : 'low'})`);
       }
 
+      // No AI enhancement needed - both services provide complete info
+      const aiGeneratedInfo = null;
       // Convert to our schema format
       const analysis = {
         pestName: result.disease_name,

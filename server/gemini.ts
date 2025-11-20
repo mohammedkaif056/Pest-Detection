@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`;
 
 interface PestAnalysisResult {
   pestName: string;
@@ -9,6 +9,94 @@ interface PestAnalysisResult {
   riskLevel: "low" | "medium" | "high" | "critical";
   similarSpecies: Array<{ name: string; confidence: number }>;
   treatments: Array<{ name: string; type: string; effectiveness: string }>;
+}
+
+interface PlantDiseaseResult {
+  disease_name: string;
+  confidence: number;
+  severity: string;
+  plant?: string;
+  pathogen_type?: string | null;
+  pathogen_name?: string | null;
+  symptoms?: string[];
+  treatment?: {
+    immediate_actions?: string[];
+    chemical_control?: string[];
+    organic_control?: string[];
+    cultural_practices?: string[];
+    maintenance?: string[];
+  };
+  prevention?: string[];
+  prognosis?: string;
+  spread_risk?: string;
+}
+
+export async function detectPlantDiseaseWithGemini(base64Image: string): Promise<PlantDiseaseResult & { source: "gemini" }> {
+  try {
+    const base64Data = base64Image.includes('base64,') 
+      ? base64Image.split('base64,')[1]
+      : base64Image;
+
+    console.log('[GEMINI] Analyzing plant disease image with Gemini 2.0 Flash...');
+
+    const response = await axios.post(GEMINI_API_URL, {
+      contents: [{
+        parts: [
+          {
+            text: `You are an expert plant pathologist. Analyze this plant image and identify any diseases.
+            Provide a detailed analysis in JSON format:
+            {
+              "disease_name": "Name of the disease (or 'Healthy Plant' if no disease detected)",
+              "confidence": 0.95,
+              "severity": "Low|Moderate|High|Critical",
+              "plant": "Plant species name",
+              "pathogen_type": "Fungus|Bacteria|Virus|Pest|Nutrient Deficiency|null",
+              "pathogen_name": "Scientific name of pathogen",
+              "symptoms": ["symptom1", "symptom2", "symptom3"],
+              "treatment": {
+                "immediate_actions": ["action1", "action2"],
+                "chemical_control": ["treatment1", "treatment2"],
+                "organic_control": ["organic treatment1", "organic treatment2"],
+                "cultural_practices": ["practice1", "practice2"],
+                "maintenance": ["tip1", "tip2"]
+              },
+              "prevention": ["prevention tip1", "prevention tip2"],
+              "prognosis": "Expected outcome with treatment",
+              "spread_risk": "low|medium|high"
+            }`
+          },
+          {
+            inline_data: {
+              mime_type: "image/jpeg",
+              data: base64Data
+            }
+          }
+        ]
+      }],
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: 3000
+      }
+    }, {
+      headers: { "Content-Type": "application/json" },
+      timeout: 20000
+    });
+
+    const content = response.data.candidates[0].content.parts[0].text;
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("Could not parse JSON from Gemini response");
+    
+    const result = JSON.parse(jsonMatch[0]);
+    console.log(`[GEMINI] ✅ Detected: ${result.disease_name} (${(result.confidence * 100).toFixed(1)}%)`);
+
+    return {
+      ...result,
+      source: "gemini" as const
+    };
+  } catch (error: any) {
+    console.error("[GEMINI] ❌ Disease detection failed:", error.response?.data || error.message);
+    throw new Error("Failed to analyze plant disease with Gemini");
+  }
 }
 
 export async function analyzePestImage(base64Image: string): Promise<PestAnalysisResult> {
